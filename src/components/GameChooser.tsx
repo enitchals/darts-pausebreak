@@ -1,4 +1,4 @@
-import React, { ChangeEvent, useState } from "react";
+import React, { ChangeEvent, useState, useEffect } from "react";
 import { bulls } from "../games/bulls";
 import { cricket } from "../games/cricket";
 import { ohGames } from "../games/oh1";
@@ -20,9 +20,10 @@ export const GameChooser: React.FC<{ singlePlayer: boolean }> = ({ singlePlayer 
   const useSound = useStore((state) => state.useSound);
   const voiceIndex = useStore((state) => state.voiceIndex);
   const setVoiceIndex = useStore((state) => state.setVoiceIndex);
+  const lastGameSettings = useStore((state) => state.lastGameSettings);
 
   const [getGame, setGame] = useState<Game>(null);
-  const [getLimit, setLimit] = useState(301);
+  const [getOh1Limit, setOh1Limit] = useState(301);
   const [getPointing, setPointing] = useState(false);
   const [getNumberOfBulls, setNumberOfBulls] = useState(25);
   const [getIn, setIn] = useState(Multiple.Single);
@@ -32,29 +33,45 @@ export const GameChooser: React.FC<{ singlePlayer: boolean }> = ({ singlePlayer 
   // this does not work until the user clicks a button
   const voices = window.speechSynthesis?.getVoices();
 
+  // Update settings when game type is selected
+  useEffect(() => {
+    if (getGame?.name && lastGameSettings[getGame.name]) {
+      const settings = lastGameSettings[getGame.name];
+      if (settings.checkIn !== undefined) setIn(settings.checkIn || Multiple.Single);
+      if (settings.checkOut !== undefined) setOut(settings.checkOut || Multiple.Single);
+      if (settings.pointing !== undefined && !singlePlayer) setPointing(settings.pointing);
+      
+      // Set appropriate limit based on game type
+      if (getGame.name === GameName.Bulls && settings.limit) {
+        setNumberOfBulls(Math.floor(settings.limit / 25));
+      } else if (getGame.name === GameName.Oh1 && settings.limit) {
+        setOh1Limit(settings.limit);
+      }
+    }
+  }, [getGame?.name, lastGameSettings, singlePlayer]);
+
   const onLimitChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = Number(event.target.value);
 
-    if (isBlank(getLimit) || value < 10) {
+    if (isBlank(value) || value < 10) {
       setError(true);
     } else {
       setError(false);
     }
 
-    setLimit(value);
+    setOh1Limit(value);
   };
 
   const onNumberOfBulls = (event: ChangeEvent<HTMLInputElement>) => {
     const value = Number(event.target.value);
 
-    if (isBlank(getLimit) || value < 3 || value > 100) {
+    if (isBlank(value) || value < 3 || value > 100) {
       setError(true);
     } else {
       setError(false);
     }
 
     setNumberOfBulls(value);
-    setLimit(value * 25);
   };
 
   const onInChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -142,7 +159,7 @@ export const GameChooser: React.FC<{ singlePlayer: boolean }> = ({ singlePlayer 
         <button
           onClick={(event) => {
             event.preventDefault();
-            setGame(ohGames(Number(getLimit)));
+            setGame(ohGames(Number(getOh1Limit)));
           }}
         >
           Oh 1 {getGame?.name === GameName.Oh1 && <span>!!</span>}
@@ -168,9 +185,9 @@ export const GameChooser: React.FC<{ singlePlayer: boolean }> = ({ singlePlayer 
       )}
       {getGame && (
         <div className="options">
-          {getGame?.limit !== 0 && getGame.name !== GameName.Bulls && (
+          {getGame?.limit !== 0 && getGame.name === GameName.Oh1 && (
             <div>
-              <input maxLength={4} type="number" max={9999} min={3} value={getLimit} onChange={onLimitChange} />
+              <input maxLength={4} type="number" max={9999} min={3} value={getOh1Limit} onChange={onLimitChange} />
               limit
               {hasError && <span>invalid value</span>}
             </div>
@@ -229,22 +246,21 @@ export const GameChooser: React.FC<{ singlePlayer: boolean }> = ({ singlePlayer 
             onClick={(event) => {
               event.preventDefault();
 
-              let limit = getLimit;
+              let limit = 0;
               let checkIn = getIn;
               let checkOut = getOut;
 
-              if (getGame?.name === GameName.Oh1 && isBlank(limit)) {
-                setError(true);
-                return;
-              }
-
-              if (getGame?.name === GameName.Bulls) {
+              if (getGame?.name === GameName.Oh1) {
+                if (isBlank(getOh1Limit)) {
+                  setError(true);
+                  return;
+                }
+                limit = getOh1Limit;
+              } else if (getGame?.name === GameName.Bulls) {
                 limit = getNumberOfBulls * 25;
                 checkIn = Multiple.Single;
                 checkOut = Multiple.Single;
-              }
-
-              if (getGame?.name === GameName.Cricket) {
+              } else if (getGame?.name === GameName.Cricket) {
                 limit = getGame.limit;
                 checkIn = null;
                 checkOut = null;
@@ -256,7 +272,6 @@ export const GameChooser: React.FC<{ singlePlayer: boolean }> = ({ singlePlayer 
                 limit = 0;
                 checkIn = null;
                 checkOut = null;
-
                 arePointing = true;
               }
 

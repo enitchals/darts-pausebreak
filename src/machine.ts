@@ -6,6 +6,21 @@ import { Game, Player, Dart, GameName, Multiple, Mark } from "./types";
 import { subscribeWithSelector } from "zustand/middleware";
 import { gameOperations } from "./games";
 
+export type GameSettings = {
+  limit: number;
+  checkIn: Multiple | null;
+  checkOut: Multiple | null;
+  pointing: boolean;
+};
+
+export type LastGameSettings = {
+  [GameName.Oh1]?: GameSettings;
+  [GameName.Bulls]?: GameSettings;
+  [GameName.Cricket]?: GameSettings;
+  [GameName.CutThroat]?: GameSettings;
+  [GameName.Tactical]?: GameSettings;
+};
+
 export type GameState = {
   players: Player[];
   addPlayer(player: Player): void;
@@ -27,6 +42,7 @@ export type GameState = {
   movePlayerRight(playerIndex: number): void;
   voiceIndex: number;
   setVoiceIndex(index: number): void;
+  lastGameSettings: LastGameSettings;
 };
 
 // this is mutating
@@ -56,6 +72,7 @@ export const useStore = create<GameState>()(
       subscribeWithSelector((set, get) => ({
         players: [],
         voiceIndex: null,
+        lastGameSettings: {},
         setVoiceIndex: (index) => {
           set((state) => {
             state.voiceIndex = index;
@@ -90,6 +107,16 @@ export const useStore = create<GameState>()(
           }),
         setGame: (game) =>
           set((state) => {
+            // Save game settings when ending a game
+            if (state.game && !game) {
+              state.lastGameSettings[state.game.name] = {
+                limit: state.game.limit,
+                checkIn: state.game.checkIn,
+                checkOut: state.game.checkOut,
+                pointing: state.game.pointing,
+              };
+            }
+            
             state.game = game;
             state.currentPlayerIndex = game ? 0 : null;
             state.winner = null;
